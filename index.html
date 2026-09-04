@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="トレーニング記録">
+<meta name="theme-color" content="#0f6e56">
+<title>トレーニング記録ツール</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#f6f5f2;
+    --card:#ffffff;
+    --border:#e2e0da;
+    --border-strong:#c9c6bd;
+    --text:#2c2c2a;
+    --text-secondary:#5f5e5a;
+    --text-muted:#888780;
+    --accent:#0f6e56;
+    --accent-bg:#e1f5ee;
+    --accent2:#534ab7;
+    --accent2-bg:#eeedfe;
+    --danger:#a32d2d;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans",sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    padding:16px;
+    max-width:640px;
+    margin:0 auto;
+    line-height:1.6;
+  }
+  h1{font-size:18px;font-weight:500;margin:0 0 4px;}
+  .sub{font-size:13px;color:var(--text-muted);margin:0 0 16px;}
+  .section-label{font-size:12px;color:var(--text-muted);margin:24px 0 8px;padding-top:8px;border-top:1px solid var(--border-strong);}
+  .section-label:first-of-type{border-top:none;margin-top:0;}
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-bottom:16px;
+  }
+  .card h2{font-size:15px;font-weight:500;margin:0 0 12px;}
+  label{font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px;}
+  select, input, button, textarea{
+    font-size:14px;
+    font-family:inherit;
+    border:1px solid var(--border-strong);
+    border-radius:8px;
+    padding:8px 10px;
+    background:#fff;
+    color:var(--text);
+  }
+  select:focus, input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  button{
+    background:var(--card);
+    cursor:pointer;
+    font-weight:500;
+  }
+  button:hover{background:#f2f1ee;}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+  button.primary:hover{background:#0c5a44;}
+  button.primary.vbt{background:var(--accent2);border-color:var(--accent2);}
+  button.primary.vbt:hover{background:#443c99;}
+  button.ghost{border:none;background:none;color:var(--text-muted);padding:4px 6px;}
+  .row{display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap;}
+  .row > div{flex:1;min-width:60px;}
+  .exercise-row{
+    display:grid;
+    grid-template-columns:1.6fr 0.8fr 0.7fr 0.6fr auto;
+    gap:6px;
+    align-items:center;
+    padding:8px 0;
+    border-top:1px solid var(--border);
+  }
+  .exercise-row:first-child{border-top:none;}
+  .exercise-row > *{ min-width:0; }
+  .exercise-row select, .exercise-row input{
+    width:100%;
+    padding:6px 4px;
+    font-size:13px;
+  }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button{
+    -webkit-appearance:none;
+    margin:0;
+  }
+  input[type=number]{
+    -moz-appearance:textfield;
+    appearance:textfield;
+  }
+  .colhead{font-size:11px;color:var(--text-muted);}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;}
+  .pill{
+    display:inline-block;
+    background:var(--accent-bg);
+    color:var(--accent);
+    font-size:12px;
+    padding:3px 10px;
+    border-radius:999px;
+  }
+  .pill.vbt{background:var(--accent2-bg);color:var(--accent2);}
+  .stat{display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+  .stat .n{font-size:20px;font-weight:500;}
+  .stat .l{font-size:11px;color:var(--text-muted);}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;font-size:11px;color:var(--text-muted);font-weight:400;padding-bottom:6px;}
+  td{padding:7px 0;border-top:1px solid var(--border);}
+  .empty{color:var(--text-muted);font-size:13px;text-align:center;padding:20px 0;}
+  .history-item{border-top:1px solid var(--border);padding:10px 0;font-size:13px;}
+  .history-item:first-child{border-top:none;}
+  .chart-wrap{position:relative;height:200px;margin-top:8px;}
+  .flex-between{display:flex;justify-content:space-between;align-items:center;}
+  .small{font-size:12px;color:var(--text-secondary);}
+  .mvt-row{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);}
+  .mvt-row label{margin:0;white-space:nowrap;}
+  .mvt-row input{width:70px;}
+</style>
+</head>
+<body>
+
+<h1>トレーニング記録ツール</h1>
+<p class="sub">筋トレのセッション記録・進捗・1RM推定に加え、VBT(挙上速度)の記録・進捗にも対応</p>
+
+<div class="card">
+  <h2>顧客を選択</h2>
+  <div class="row">
+    <div>
+      <label for="customerSelect">顧客</label>
+      <select id="customerSelect" style="width:100%"></select>
+    </div>
+    <button id="addCustomerBtn">+ 新規顧客</button>
+  </div>
+</div>
+
+<p class="section-label">筋力トレーニング</p>
+
+<div class="card" id="sessionCard">
+  <div class="toolbar">
+    <h2 style="margin:0">セッション記録</h2>
+    <div>
+      <label for="sessionDate" style="display:inline;margin-right:6px;">日付</label>
+      <input type="date" id="sessionDate">
+    </div>
+  </div>
+  <div id="exerciseHead" class="exercise-row" style="display:none">
+    <span class="colhead">種目</span>
+    <span class="colhead">重量kg</span>
+    <span class="colhead">回数</span>
+    <span class="colhead">set</span>
+    <span></span>
+  </div>
+  <div id="exerciseRows"></div>
+  <div style="margin-top:10px;display:flex;gap:8px;">
+    <button id="addRowBtn">+ 種目を追加</button>
+    <button id="saveSessionBtn" class="primary">このセッションを保存</button>
+  </div>
+</div>
+
+<div class="card" id="progressCard">
+  <div class="toolbar">
+    <h2 style="margin:0">進捗・自己ベスト・1RM</h2>
+    <select id="exerciseSelect" style="min-width:140px"></select>
+  </div>
+  <div id="progressBody"></div>
+</div>
+
+<div class="card">
+  <div class="flex-between">
+    <h2 style="margin:0">セッション履歴</h2>
+  </div>
+  <div id="historyList"></div>
+</div>
+
+<p class="section-label">VBT(Velocity Based Training)</p>
+
+<div class="card" id="vbtSessionCard">
+  <div class="toolbar">
+    <h2 style="margin:0">VBTセッション記録</h2>
+    <div>
+      <label for="vbtSessionDate" style="display:inline;margin-right:6px;">日付</label>
+      <input type="date" id="vbtSessionDate">
+    </div>
+  </div>
+  <p class="small" style="margin-top:-6px;">enodeなどのVBTデバイスで計測した値をセッション後にまとめて入力してください。</p>
+  <div id="vbtExerciseHead" class="exercise-row" style="display:none">
+    <span class="colhead">種目</span>
+    <span class="colhead">重量kg</span>
+    <span class="colhead">平均速度m/s</span>
+    <span class="colhead">回数</span>
+    <span></span>
+  </div>
+  <div id="vbtExerciseRows"></div>
+  <div style="margin-top:10px;display:flex;gap:8px;">
+    <button id="addVbtRowBtn">+ 種目を追加</button>
+    <button id="saveVbtSessionBtn" class="primary vbt">このVBTセッションを保存</button>
+  </div>
+</div>
+
+<div class="card" id="vbtProgressCard">
+  <div class="toolbar">
+    <h2 style="margin:0">VBT進捗・Load-Velocity Profile</h2>
+    <select id="vbtExerciseSelect" style="min-width:140px"></select>
+  </div>
+  <div id="vbtProgressBody"></div>
+</div>
+
+<div class="card">
+  <div class="flex-between">
+    <h2 style="margin:0">VBTセッション履歴</h2>
+  </div>
+  <div id="vbtHistoryList"></div>
+</div>
+
+<script>
+// ---------- storage helpers (ブラウザ標準のlocalStorageを使用。どの環境でも動作) ----------
+async function loadJSON(key, fallback){
+  try{
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  }catch(e){ return fallback; }
+}
+async function saveJSON(key, value){
+  try{ localStorage.setItem(key, JSON.stringify(value)); }
+  catch(e){ console.error('storage error', e); }
+}
+
+const DEFAULT_EXERCISES = ["ベンチプレス","スクワット","デッドリフト","ショルダープレス","ラットプルダウン"];
+const DEFAULT_VBT_EXERCISES = ["スクワット","ベンチプレス","デッドリフト","ジャンプスクワット"];
+
+let state = {
+  customers: [],
+  exercises: [],
+  sessionsByCustomer: {},
+  vbtExercises: [],
+  vbtSessionsByCustomer: {}
+};
+let currentCustomerId = null;
+let draftRows = [];
+let draftVbtRows = [];
+let chart = null;
+let vbtTrendChart = null;
+let lvpChart = null;
+
+// ---------- in-page prompt dialog (native prompt() はプレビュー環境でブロックされることがあるため自作) ----------
+function showPromptModal(title, defaultValue){
+  return new Promise((resolve)=>{
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:12px;padding:18px;width:100%;max-width:320px;box-shadow:0 8px 30px rgba(0,0,0,0.15);';
+    box.innerHTML = `
+      <p style="font-size:14px;font-weight:500;margin:0 0 10px;">${title}</p>
+      <input type="text" id="__promptInput" style="width:100%;margin-bottom:14px;box-sizing:border-box;">
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button type="button" id="__promptCancel">キャンセル</button>
+        <button type="button" id="__promptOk" class="primary">OK</button>
+      </div>
+    `;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    const input = box.querySelector('#__promptInput');
+    input.value = defaultValue || '';
+    setTimeout(()=>input.focus(), 0);
+    function cleanup(result){
+      overlay.remove();
+      resolve(result);
+    }
+    box.querySelector('#__promptCancel').addEventListener('click', ()=>cleanup(null));
+    box.querySelector('#__promptOk').addEventListener('click', ()=>cleanup(input.value));
+    overlay.addEventListener('click', (e)=>{ if(e.target === overlay) cleanup(null); });
+    input.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter'){ e.preventDefault(); cleanup(input.value); }
+      if(e.key === 'Escape'){ e.preventDefault(); cleanup(null); }
+    });
+  });
+}
+
+// ---------- generic exercise-name select (shared by strength & VBT) ----------
+function rebuildSelectOptions(sel, list){
+  const current = sel.value;
+  sel.innerHTML = '';
+  if(list.length === 0){
+    const p = document.createElement('option');
+    p.value = ''; p.textContent = '種目を選択'; p.disabled = true; p.selected = true;
+    sel.appendChild(p);
+  }
+  list.forEach(n=>{
+    const o = document.createElement('option');
+    o.value = n; o.textContent = n;
+    sel.appendChild(o);
+  });
+  const add = document.createElement('option');
+  add.value = '__add_new__'; add.textContent = '＋ 新しい種目を追加';
+  sel.appendChild(add);
+  if(list.includes(current)) sel.value = current;
+}
+
+function createNameSelect(exercisesList, storageKey, groupAttr, prefillName){
+  const sel = document.createElement('select');
+  sel.dataset.role = 'exerciseName';
+  sel.dataset.group = groupAttr;
+  rebuildSelectOptions(sel, exercisesList);
+  if(prefillName && exercisesList.includes(prefillName)) sel.value = prefillName;
+  sel.dataset.prevValue = sel.value;
+  sel.addEventListener('change', async ()=>{
+    if(sel.value === '__add_new__'){
+      const newName = await showPromptModal('新しい種目名を入力してください');
+      const prevValue = sel.dataset.prevValue || '';
+      if(newName && newName.trim()){
+        const trimmed = newName.trim();
+        if(!exercisesList.includes(trimmed)){
+          exercisesList.push(trimmed);
+          await saveJSON(storageKey, exercisesList);
+        }
+        document.querySelectorAll('select[data-group="'+groupAttr+'"]').forEach(s=>{
+          const keep = (s === sel) ? trimmed : s.value;
+          rebuildSelectOptions(s, exercisesList);
+          if(exercisesList.includes(keep)) s.value = keep;
+        });
+      } else {
+        rebuildSelectOptions(sel, exercisesList);
+        sel.value = prevValue;
+      }
+    }
+    sel.dataset.prevValue = sel.value;
+  });
+  return sel;
+}
+
+// ---------- init ----------
+async function init(){
+  state.customers = await loadJSON('customers', []);
+  state.exercises = await loadJSON('exercises', DEFAULT_EXERCISES.slice());
+  state.vbtExercises = await loadJSON('vbtExercises', DEFAULT_VBT_EXERCISES.slice());
+  document.getElementById('sessionDate').valueAsDate = new Date();
+  document.getElementById('vbtSessionDate').valueAsDate = new Date();
+
+  renderCustomerSelect();
+  if(state.customers.length){
+    currentCustomerId = state.customers[0].id;
+  }
+  await loadCustomerData();
+  addExerciseRow();
+  addVbtRow();
+  renderExerciseOptions();
+  renderVbtExerciseOptions();
+}
+
+function renderCustomerSelect(){
+  const sel = document.getElementById('customerSelect');
+  sel.innerHTML = '';
+  if(state.customers.length === 0){
+    const opt = document.createElement('option');
+    opt.textContent = '(顧客を追加してください)';
+    sel.appendChild(opt);
+    return;
+  }
+  state.customers.forEach(c=>{
+    const opt = document.createElement('option');
+    opt.value = c.id; opt.textContent = c.name;
+    if(c.id === currentCustomerId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+document.getElementById('addCustomerBtn').addEventListener('click', async ()=>{
+  const name = await showPromptModal('顧客名を入力してください');
+  if(!name || !name.trim()) return;
+  const id = 'c' + Date.now();
+  state.customers.push({id, name: name.trim()});
+  await saveJSON('customers', state.customers);
+  currentCustomerId = id;
+  renderCustomerSelect();
+  await loadCustomerData();
+});
+
+document.getElementById('customerSelect').addEventListener('change', async (e)=>{
+  currentCustomerId = e.target.value;
+  await loadCustomerData();
+});
+
+async function loadCustomerData(){
+  if(!currentCustomerId){
+    renderHistory([]);
+    renderProgress();
+    renderVbtHistory([]);
+    renderVbtProgress();
+    return;
+  }
+  const key = 'sessions:' + currentCustomerId;
+  if(!state.sessionsByCustomer[currentCustomerId]){
+    state.sessionsByCustomer[currentCustomerId] = await loadJSON(key, []);
+  }
+  const vbtKey = 'vbtSessions:' + currentCustomerId;
+  if(!state.vbtSessionsByCustomer[currentCustomerId]){
+    state.vbtSessionsByCustomer[currentCustomerId] = await loadJSON(vbtKey, []);
+  }
+  renderHistory(state.sessionsByCustomer[currentCustomerId]);
+  renderExerciseOptions();
+  renderProgress();
+  renderVbtHistory(state.vbtSessionsByCustomer[currentCustomerId]);
+  renderVbtExerciseOptions();
+  renderVbtProgress();
+}
+
+// ================= 筋力トレーニング =================
+
+function addExerciseRow(prefill){
+  const id = 'r' + Date.now() + Math.random().toString(36).slice(2,6);
+  draftRows.push(id);
+  const wrap = document.getElementById('exerciseRows');
+  document.getElementById('exerciseHead').style.display = 'grid';
+  const row = document.createElement('div');
+  row.className = 'exercise-row';
+  row.id = id;
+
+  const nameSel = createNameSelect(state.exercises, 'exercises', 'strength', prefill && prefill.name);
+
+  const weightInput = document.createElement('input');
+  weightInput.type = 'number'; weightInput.step = '0.5'; weightInput.placeholder = 'kg';
+  weightInput.value = (prefill && prefill.weight) || '';
+
+  const repsInput = document.createElement('input');
+  repsInput.type = 'number'; repsInput.placeholder = '回';
+  repsInput.value = (prefill && prefill.reps) || '';
+
+  const setsInput = document.createElement('input');
+  setsInput.type = 'number'; setsInput.placeholder = 'set';
+  setsInput.value = (prefill && prefill.sets) || '';
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'ghost';
+  delBtn.textContent = '×';
+  delBtn.addEventListener('click', ()=>{
+    row.remove();
+    draftRows = draftRows.filter(r=>r!==id);
+  });
+
+  row.appendChild(nameSel);
+  row.appendChild(weightInput);
+  row.appendChild(repsInput);
+  row.appendChild(setsInput);
+  row.appendChild(delBtn);
+  wrap.appendChild(row);
+}
+
+document.getElementById('addRowBtn').addEventListener('click', ()=>addExerciseRow());
+
+document.getElementById('saveSessionBtn').addEventListener('click', async ()=>{
+  if(!currentCustomerId){ alert('先に顧客を選択・追加してください'); return; }
+  const date = document.getElementById('sessionDate').value;
+  const exercises = [];
+  draftRows.forEach(id=>{
+    const row = document.getElementById(id);
+    if(!row) return;
+    const nameSel = row.querySelector('select[data-role="exerciseName"]');
+    const inputs = row.querySelectorAll('input');
+    const name = (nameSel ? nameSel.value : '').trim();
+    const weight = parseFloat(inputs[0].value);
+    const reps = parseInt(inputs[1].value);
+    const sets = parseInt(inputs[2].value);
+    if(name && !isNaN(weight) && !isNaN(reps)){
+      exercises.push({name, weight, reps, sets: isNaN(sets)?1:sets});
+      if(!state.exercises.includes(name)) state.exercises.push(name);
+    }
+  });
+  if(exercises.length === 0){ alert('種目・重量・回数を入力してください'); return; }
+
+  const list = state.sessionsByCustomer[currentCustomerId] || [];
+  list.push({date, exercises});
+  list.sort((a,b)=> a.date < b.date ? -1 : 1);
+  state.sessionsByCustomer[currentCustomerId] = list;
+
+  await saveJSON('sessions:' + currentCustomerId, list);
+  await saveJSON('exercises', state.exercises);
+
+  document.getElementById('exerciseRows').innerHTML = '';
+  draftRows = [];
+  addExerciseRow();
+  renderExerciseOptions();
+  renderHistory(list);
+  renderProgress();
+});
+
+function renderExerciseOptions(){
+  const sel = document.getElementById('exerciseSelect');
+  const prevValue = sel.value;
+  const used = new Set();
+  (state.sessionsByCustomer[currentCustomerId] || []).forEach(s=>s.exercises.forEach(e=>used.add(e.name)));
+  const names = Array.from(used);
+  sel.innerHTML = '';
+  if(names.length === 0){
+    const opt = document.createElement('option');
+    opt.textContent = '(記録がまだありません)';
+    sel.appendChild(opt);
+    return;
+  }
+  names.forEach(n=>{
+    const opt = document.createElement('option');
+    opt.value = n; opt.textContent = n;
+    sel.appendChild(opt);
+  });
+  if(names.includes(prevValue)) sel.value = prevValue;
+}
+document.getElementById('exerciseSelect').addEventListener('change', renderProgress);
+
+function epley1RM(weight, reps){
+  if(reps <= 1) return weight;
+  return weight * (1 + reps/30);
+}
+
+function renderProgress(){
+  const body = document.getElementById('progressBody');
+  const sel = document.getElementById('exerciseSelect');
+  const exName = sel.value;
+  const sessions = state.sessionsByCustomer[currentCustomerId] || [];
+
+  if(!exName || sessions.length === 0){
+    body.innerHTML = '<p class="empty">記録が増えるとここに推移グラフ・自己ベスト・推定1RMが表示されます。</p>';
+    return;
+  }
+
+  const records = [];
+  sessions.forEach(s=>{
+    s.exercises.filter(e=>e.name===exName).forEach(e=>{
+      records.push({date:s.date, weight:e.weight, reps:e.reps, sets:e.sets, oneRM: epley1RM(e.weight, e.reps)});
+    });
+  });
+  if(records.length === 0){
+    body.innerHTML = '<p class="empty">この種目の記録がありません。</p>';
+    return;
+  }
+
+  const bestByWeight = {};
+  records.forEach(r=>{
+    const key = r.weight;
+    if(!bestByWeight[key] || r.reps > bestByWeight[key].reps ||
+      (r.reps === bestByWeight[key].reps && r.date > bestByWeight[key].date)){
+      bestByWeight[key] = r;
+    }
+  });
+  const bestList = Object.values(bestByWeight).sort((a,b)=>a.weight-b.weight);
+
+  const latest = records[records.length-1];
+  const best1RM = records.reduce((m,r)=> r.oneRM>m.oneRM ? r : m, records[0]);
+
+  body.innerHTML = `
+    <div class="chart-wrap"><canvas id="progressChart"></canvas></div>
+    <div class="stat">
+      <div><div class="n">${latest.weight}kg</div><div class="l">直近の重量</div></div>
+      <div><div class="n">${latest.reps}回</div><div class="l">直近の回数</div></div>
+      <div><div class="n">${latest.oneRM.toFixed(1)}kg</div><div class="l">直近セットの推定1RM</div></div>
+      <div><div class="n">${best1RM.oneRM.toFixed(1)}kg</div><div class="l">これまでの最高推定1RM</div></div>
+    </div>
+    <h3 style="font-size:13px;font-weight:500;margin:16px 0 6px;">自己ベスト(重量別の最大回数)</h3>
+    <table>
+      <tr><th>重量</th><th>最大回数</th><th>達成日</th><th>推定1RM</th></tr>
+      ${bestList.map(r=>`<tr><td>${r.weight}kg</td><td>${r.reps}回</td><td class="small">${r.date}</td><td class="small">${r.oneRM.toFixed(1)}kg</td></tr>`).join('')}
+    </table>
+  `;
+
+  const ctx = document.getElementById('progressChart');
+  if(chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: records.map(r=>r.date),
+      datasets: [
+        { label:'重量(kg)', data: records.map(r=>r.weight), borderColor:'#0f6e56', backgroundColor:'rgba(15,110,86,0.08)', fill:true, tension:0.25, pointRadius:3 },
+        { label:'推定1RM(kg)', data: records.map(r=>Number(r.oneRM.toFixed(1))), borderColor:'#996b1d', borderDash:[4,3], fill:false, tension:0.25, pointRadius:3 }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:11}} } },
+      scales:{
+        x:{ ticks:{font:{size:10}}, grid:{display:false} },
+        y:{ ticks:{font:{size:10}}, grid:{color:'rgba(0,0,0,0.06)'} }
+      }
+    }
+  });
+}
+
+function renderHistory(sessions){
+  const wrap = document.getElementById('historyList');
+  if(!sessions || sessions.length === 0){
+    wrap.innerHTML = '<p class="empty">まだセッション記録がありません。</p>';
+    return;
+  }
+  const sorted = sessions.slice().sort((a,b)=> a.date < b.date ? 1 : -1);
+  wrap.innerHTML = sorted.map(s=>`
+    <div class="history-item">
+      <div class="flex-between"><span style="font-weight:500;">${s.date}</span><span class="pill">${s.exercises.length}種目</span></div>
+      <div class="small" style="margin-top:4px;">
+        ${s.exercises.map(e=>`${e.name} ${e.weight}kg×${e.reps}回×${e.sets}set`).join(' / ')}
+      </div>
+    </div>
+  `).join('');
+}
+
+// ================= VBT =================
+
+function addVbtRow(prefill){
+  const id = 'v' + Date.now() + Math.random().toString(36).slice(2,6);
+  draftVbtRows.push(id);
+  const wrap = document.getElementById('vbtExerciseRows');
+  document.getElementById('vbtExerciseHead').style.display = 'grid';
+  const row = document.createElement('div');
+  row.className = 'exercise-row';
+  row.id = id;
+
+  const nameSel = createNameSelect(state.vbtExercises, 'vbtExercises', 'vbt', prefill && prefill.name);
+
+  const weightInput = document.createElement('input');
+  weightInput.type = 'number'; weightInput.step = '0.5'; weightInput.placeholder = 'kg';
+  weightInput.value = (prefill && prefill.weight) || '';
+
+  const velocityInput = document.createElement('input');
+  velocityInput.type = 'number'; velocityInput.step = '0.01'; velocityInput.placeholder = 'm/s';
+  velocityInput.value = (prefill && prefill.velocity) || '';
+
+  const repsInput = document.createElement('input');
+  repsInput.type = 'number'; repsInput.placeholder = '回';
+  repsInput.value = (prefill && prefill.reps) || '';
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'ghost';
+  delBtn.textContent = '×';
+  delBtn.addEventListener('click', ()=>{
+    row.remove();
+    draftVbtRows = draftVbtRows.filter(r=>r!==id);
+  });
+
+  row.appendChild(nameSel);
+  row.appendChild(weightInput);
+  row.appendChild(velocityInput);
+  row.appendChild(repsInput);
+  row.appendChild(delBtn);
+  wrap.appendChild(row);
+}
+
+document.getElementById('addVbtRowBtn').addEventListener('click', ()=>addVbtRow());
+
+document.getElementById('saveVbtSessionBtn').addEventListener('click', async ()=>{
+  if(!currentCustomerId){ alert('先に顧客を選択・追加してください'); return; }
+  const date = document.getElementById('vbtSessionDate').value;
+  const exercises = [];
+  draftVbtRows.forEach(id=>{
+    const row = document.getElementById(id);
+    if(!row) return;
+    const nameSel = row.querySelector('select[data-role="exerciseName"]');
+    const inputs = row.querySelectorAll('input');
+    const name = (nameSel ? nameSel.value : '').trim();
+    const weight = parseFloat(inputs[0].value);
+    const velocity = parseFloat(inputs[1].value);
+    const reps = parseInt(inputs[2].value);
+    if(name && !isNaN(weight) && !isNaN(velocity)){
+      exercises.push({name, weight, velocity, reps: isNaN(reps)?1:reps});
+      if(!state.vbtExercises.includes(name)) state.vbtExercises.push(name);
+    }
+  });
+  if(exercises.length === 0){ alert('種目・重量・平均速度を入力してください'); return; }
+
+  const list = state.vbtSessionsByCustomer[currentCustomerId] || [];
+  list.push({date, exercises});
+  list.sort((a,b)=> a.date < b.date ? -1 : 1);
+  state.vbtSessionsByCustomer[currentCustomerId] = list;
+
+  await saveJSON('vbtSessions:' + currentCustomerId, list);
+  await saveJSON('vbtExercises', state.vbtExercises);
+
+  document.getElementById('vbtExerciseRows').innerHTML = '';
+  draftVbtRows = [];
+  addVbtRow();
+  renderVbtExerciseOptions();
+  renderVbtHistory(list);
+  renderVbtProgress();
+});
+
+function renderVbtExerciseOptions(){
+  const sel = document.getElementById('vbtExerciseSelect');
+  const prevValue = sel.value;
+  const used = new Set();
+  (state.vbtSessionsByCustomer[currentCustomerId] || []).forEach(s=>s.exercises.forEach(e=>used.add(e.name)));
+  const names = Array.from(used);
+  sel.innerHTML = '';
+  if(names.length === 0){
+    const opt = document.createElement('option');
+    opt.textContent = '(記録がまだありません)';
+    sel.appendChild(opt);
+    return;
+  }
+  names.forEach(n=>{
+    const opt = document.createElement('option');
+    opt.value = n; opt.textContent = n;
+    sel.appendChild(opt);
+  });
+  if(names.includes(prevValue)) sel.value = prevValue;
+}
+document.getElementById('vbtExerciseSelect').addEventListener('change', renderVbtProgress);
+
+function linearRegression(points){
+  const n = points.length;
+  if(n < 2) return null;
+  const sumX = points.reduce((s,p)=>s+p.x,0);
+  const sumY = points.reduce((s,p)=>s+p.y,0);
+  const sumXY = points.reduce((s,p)=>s+p.x*p.y,0);
+  const sumXX = points.reduce((s,p)=>s+p.x*p.x,0);
+  const denom = (n*sumXX - sumX*sumX);
+  if(denom === 0) return null;
+  const slope = (n*sumXY - sumX*sumY)/denom;
+  const intercept = (sumY - slope*sumX)/n;
+  return {slope, intercept};
+}
+
+// ---------- velocity zone reference (Olympic lifts / power clean 系) ----------
+const VELOCITY_ZONES = [
+  { name:'NONE',              from:0,    to:8,   color:'#3fae4a', label:'' },
+  { name:'STARTING STRENGTH', from:8,    to:28,  color:'#57b34a', label:'>1.6 m/s' },
+  { name:'SPEED/STRENGTH',    from:28,   to:48,  color:'#8a9e3f', label:'1.6-1.4 m/s' },
+  { name:'STRENGTH/SPEED',    from:48,   to:63,  color:'#a97f3a', label:'1.4-1.25 m/s' },
+  { name:'ACCELERATIVE STRENGTH', from:63, to:80, color:'#bb5a3a', label:'1.25-1.10 m/s' },
+  { name:'ABSOLUTE STRENGTH', from:80,   to:100, color:'#c2352f', label:'<1.10 m/s' }
+];
+// 速度→%1RM軸上の位置(%) への区分線形マッピング(境界点)
+const VELOCITY_ZONE_ANCHORS = [
+  { v:1.9,  pos:2 },
+  { v:1.6,  pos:28 },
+  { v:1.4,  pos:48 },
+  { v:1.25, pos:63 },
+  { v:1.10, pos:80 },
+  { v:0.8,  pos:100 }
+];
+function velocityToZonePosition(v){
+  const a = VELOCITY_ZONE_ANCHORS;
+  if(v >= a[0].v) return a[0].pos;
+  if(v <= a[a.length-1].v) return a[a.length-1].pos;
+  for(let i=0; i<a.length-1; i++){
+    if(v <= a[i].v && v >= a[i+1].v){
+      const ratio = (a[i].v - v) / (a[i].v - a[i+1].v);
+      return a[i].pos + ratio * (a[i+1].pos - a[i].pos);
+    }
+  }
+  return 50;
+}
+function velocityZoneName(v){
+  if(v > 1.6) return 'スターティングストレングス';
+  if(v > 1.4) return 'スピード/ストレングス';
+  if(v > 1.25) return 'ストレングス/スピード';
+  if(v > 1.10) return 'アクセラレーティブストレングス';
+  return 'アブソリュートストレングス';
+}
+function renderVelocityZoneBar(latestVelocity){
+  const pos = velocityToZonePosition(latestVelocity);
+  const gradientStops = VELOCITY_ZONES.map(z=>`${z.color} ${z.from}%, ${z.color} ${z.to}%`).join(', ');
+  return `
+    <h3 style="font-size:13px;font-weight:500;margin:16px 0 6px;">速度ゾーン早見表(オリンピックリフト系の目安)</h3>
+    <p class="small" style="margin:0 0 8px;">%1RMの目安と、その時に出やすい平均速度のゾーンです。パワークリーンなど瞬発系種目の目安で、スクワット・ベンチ等は基準が異なります。</p>
+    <div style="position:relative; margin-top:22px;">
+      <div style="position:absolute; left:${pos}%; top:-20px; transform:translateX(-50%); font-size:11px; font-weight:500; color:var(--text); white-space:nowrap;">▼ 現在 ${latestVelocity.toFixed(2)}m/s</div>
+      <div style="height:34px; border-radius:6px; overflow:hidden; display:flex;">
+        ${VELOCITY_ZONES.map(z=>`<div style="width:${z.to-z.from}%; background:${z.color}; display:flex; align-items:center; justify-content:center;"></div>`).join('')}
+      </div>
+      <div style="display:flex; font-size:9px; color:#fff; margin-top:-30px; height:34px; align-items:center; pointer-events:none;">
+        ${VELOCITY_ZONES.map(z=>`<div style="width:${z.to-z.from}%; text-align:center; line-height:1.2; padding:0 2px;">${z.name}</div>`).join('')}
+      </div>
+      <div style="display:flex; font-size:10px; color:var(--text-secondary); margin-top:6px;">
+        ${VELOCITY_ZONES.map(z=>`<div style="width:${z.to-z.from}%; text-align:center;">${z.label}</div>`).join('')}
+      </div>
+    </div>
+    <p class="small" style="margin-top:14px;">現在のゾーン: <strong style="color:var(--text);">${velocityZoneName(latestVelocity)}</strong></p>
+  `;
+}
+
+let currentMVT = 0.15;
+
+function renderVbtProgress(){
+  const body = document.getElementById('vbtProgressBody');
+  const sel = document.getElementById('vbtExerciseSelect');
+  const exName = sel.value;
+  const sessions = state.vbtSessionsByCustomer[currentCustomerId] || [];
+
+  if(!exName || sessions.length === 0){
+    body.innerHTML = '<p class="empty">VBTの記録が増えるとここに速度推移・Load-Velocity Profile・推定1RMが表示されます。</p>';
+    return;
+  }
+
+  const records = [];
+  sessions.forEach(s=>{
+    s.exercises.filter(e=>e.name===exName).forEach(e=>{
+      records.push({date:s.date, weight:e.weight, velocity:e.velocity, reps:e.reps});
+    });
+  });
+  if(records.length === 0){
+    body.innerHTML = '<p class="empty">この種目のVBT記録がありません。</p>';
+    return;
+  }
+
+  const bestByWeight = {};
+  records.forEach(r=>{
+    const key = r.weight;
+    if(!bestByWeight[key] || r.velocity > bestByWeight[key].velocity){
+      bestByWeight[key] = r;
+    }
+  });
+  const bestList = Object.values(bestByWeight).sort((a,b)=>a.weight-b.weight);
+
+  const latest = records[records.length-1];
+  const distinctWeights = new Set(records.map(r=>r.weight));
+  const reg = distinctWeights.size >= 2 ? linearRegression(records.map(r=>({x:r.weight, y:r.velocity}))) : null;
+  let estOneRM = null;
+  if(reg && reg.slope < 0){
+    estOneRM = (currentMVT - reg.intercept) / reg.slope;
+  }
+
+  body.innerHTML = `
+    <div class="chart-wrap"><canvas id="vbtTrendChart"></canvas></div>
+    <div class="stat">
+      <div><div class="n">${latest.weight}kg</div><div class="l">直近の重量</div></div>
+      <div><div class="n">${latest.velocity.toFixed(2)}m/s</div><div class="l">直近の平均速度</div></div>
+      <div><div class="n">${estOneRM ? estOneRM.toFixed(1)+'kg' : '—'}</div><div class="l">LVPからの推定1RM</div></div>
+    </div>
+    <h3 style="font-size:13px;font-weight:500;margin:16px 0 6px;">Load-Velocity Profile</h3>
+    <div class="chart-wrap"><canvas id="lvpChart"></canvas></div>
+    <div class="mvt-row">
+      <label for="mvtInput">最小速度閾値(MVT) m/s</label>
+      <input type="number" id="mvtInput" step="0.01" value="${currentMVT}">
+      <span class="small">種目により目安が異なります(例:スクワット/ベンチ 約0.1〜0.2m/s)</span>
+    </div>
+    ${distinctWeights.size < 2 ? '<p class="small" style="margin-top:8px;">重量を変えた記録が2件以上あるとLoad-Velocity Profileと推定1RMが計算されます。</p>' : ''}
+    <h3 style="font-size:13px;font-weight:500;margin:16px 0 6px;">自己ベスト(重量別の最高速度)</h3>
+    <table>
+      <tr><th>重量</th><th>最高平均速度</th><th>達成日</th></tr>
+      ${bestList.map(r=>`<tr><td>${r.weight}kg</td><td>${r.velocity.toFixed(2)}m/s</td><td class="small">${r.date}</td></tr>`).join('')}
+    </table>
+    ${renderVelocityZoneBar(latest.velocity)}
+  `;
+
+  document.getElementById('mvtInput').addEventListener('change', (e)=>{
+    const v = parseFloat(e.target.value);
+    if(!isNaN(v)){ currentMVT = v; renderVbtProgress(); }
+  });
+
+  const trendCtx = document.getElementById('vbtTrendChart');
+  if(vbtTrendChart) vbtTrendChart.destroy();
+  vbtTrendChart = new Chart(trendCtx, {
+    type:'line',
+    data:{
+      labels: records.map(r=>r.date),
+      datasets:[
+        { label:'重量(kg)', data: records.map(r=>r.weight), borderColor:'#0f6e56', backgroundColor:'rgba(15,110,86,0.08)', fill:true, tension:0.25, pointRadius:3, yAxisID:'y' },
+        { label:'平均速度(m/s)', data: records.map(r=>r.velocity), borderColor:'#534ab7', fill:false, tension:0.25, pointRadius:3, yAxisID:'y1' }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:11}} } },
+      scales:{
+        x:{ ticks:{font:{size:10}}, grid:{display:false} },
+        y:{ position:'left', ticks:{font:{size:10}}, grid:{color:'rgba(0,0,0,0.06)'}, title:{display:true, text:'kg', font:{size:10}} },
+        y1:{ position:'right', ticks:{font:{size:10}}, grid:{display:false}, title:{display:true, text:'m/s', font:{size:10}} }
+      }
+    }
+  });
+
+  const lvpCtx = document.getElementById('lvpChart');
+  if(lvpChart) lvpChart.destroy();
+  const scatterData = records.map(r=>({x:r.weight, y:r.velocity}));
+  const datasets = [{
+    label:'記録',
+    data: scatterData,
+    backgroundColor:'#534ab7',
+    pointRadius:4,
+    showLine:false
+  }];
+  if(reg){
+    const minX = Math.min(...records.map(r=>r.weight), estOneRM || Infinity);
+    const maxX = Math.max(...records.map(r=>r.weight), estOneRM || 0);
+    const linePts = [
+      {x: Math.max(0, minX-5), y: reg.intercept + reg.slope*Math.max(0, minX-5)},
+      {x: maxX+5, y: reg.intercept + reg.slope*(maxX+5)}
+    ];
+    datasets.push({
+      label:'回帰直線(LVP)',
+      data: linePts,
+      borderColor:'#c9c6bd',
+      borderDash:[4,3],
+      pointRadius:0,
+      showLine:true,
+      fill:false
+    });
+    if(estOneRM){
+      datasets.push({
+        label:'推定1RM',
+        data: [{x:estOneRM, y:currentMVT}],
+        backgroundColor:'#a32d2d',
+        pointRadius:6,
+        showLine:false
+      });
+    }
+  }
+  lvpChart = new Chart(lvpCtx, {
+    type:'scatter',
+    data:{ datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:11}} } },
+      scales:{
+        x:{ title:{display:true, text:'重量(kg)', font:{size:10}}, ticks:{font:{size:10}}, grid:{color:'rgba(0,0,0,0.06)'} },
+        y:{ title:{display:true, text:'平均速度(m/s)', font:{size:10}}, ticks:{font:{size:10}}, grid:{color:'rgba(0,0,0,0.06)'} }
+      }
+    }
+  });
+}
+
+function renderVbtHistory(sessions){
+  const wrap = document.getElementById('vbtHistoryList');
+  if(!sessions || sessions.length === 0){
+    wrap.innerHTML = '<p class="empty">まだVBTセッション記録がありません。</p>';
+    return;
+  }
+  const sorted = sessions.slice().sort((a,b)=> a.date < b.date ? 1 : -1);
+  wrap.innerHTML = sorted.map(s=>`
+    <div class="history-item">
+      <div class="flex-between"><span style="font-weight:500;">${s.date}</span><span class="pill vbt">${s.exercises.length}種目</span></div>
+      <div class="small" style="margin-top:4px;">
+        ${s.exercises.map(e=>`${e.name} ${e.weight}kg @ ${e.velocity.toFixed(2)}m/s ×${e.reps}回`).join(' / ')}
+      </div>
+    </div>
+  `).join('');
+}
+
+init();
+</script>
+</body>
+</html>
