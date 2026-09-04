@@ -122,6 +122,15 @@
   .mvt-row{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);}
   .mvt-row label{margin:0;white-space:nowrap;}
   .mvt-row input{width:70px;}
+  .manage-row{display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid var(--border);}
+  .manage-row:first-child{border-top:none;}
+  .manage-row span{flex:1;font-size:14px;word-break:break-all;}
+  .manage-row button{padding:4px 8px;font-size:13px;}
+  .history-actions{display:flex;align-items:center;gap:4px;}
+  .history-actions button{padding:2px 6px;font-size:13px;}
+  .icon-btn{border:none;background:none;color:var(--text-muted);padding:2px 6px;cursor:pointer;font-size:13px;}
+  .icon-btn:hover{color:var(--text);}
+  .icon-btn.danger:hover{color:var(--danger);}
 </style>
 </head>
 <body>
@@ -137,6 +146,7 @@
       <select id="customerSelect" style="width:100%"></select>
     </div>
     <button id="addCustomerBtn">+ 新規顧客</button>
+    <button id="manageCustomersBtn">✎ 顧客を編集</button>
   </div>
 </div>
 
@@ -160,6 +170,7 @@
   <div id="exerciseRows"></div>
   <div style="margin-top:10px;display:flex;gap:8px;">
     <button id="addRowBtn">+ 種目を追加</button>
+    <button id="manageExercisesBtn">✎ 種目名を編集</button>
     <button id="saveSessionBtn" class="primary">このセッションを保存</button>
   </div>
 </div>
@@ -200,6 +211,7 @@
   <div id="vbtExerciseRows"></div>
   <div style="margin-top:10px;display:flex;gap:8px;">
     <button id="addVbtRowBtn">+ 種目を追加</button>
+    <button id="manageVbtExercisesBtn">✎ 種目名を編集</button>
     <button id="saveVbtSessionBtn" class="primary vbt">このVBTセッションを保存</button>
   </div>
 </div>
@@ -281,6 +293,87 @@ function showPromptModal(title, defaultValue){
       if(e.key === 'Escape'){ e.preventDefault(); cleanup(null); }
     });
   });
+}
+
+// ---------- in-page confirm dialog ----------
+function showConfirmModal(message){
+  return new Promise((resolve)=>{
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:12px;padding:18px;width:100%;max-width:320px;box-shadow:0 8px 30px rgba(0,0,0,0.15);';
+    box.innerHTML = `
+      <p style="font-size:14px;margin:0 0 14px;">${message}</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button type="button" id="__confirmCancel">キャンセル</button>
+        <button type="button" id="__confirmOk" class="primary" style="background:var(--danger);border-color:var(--danger);">削除する</button>
+      </div>
+    `;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function cleanup(result){ overlay.remove(); resolve(result); }
+    box.querySelector('#__confirmCancel').addEventListener('click', ()=>cleanup(false));
+    box.querySelector('#__confirmOk').addEventListener('click', ()=>cleanup(true));
+    overlay.addEventListener('click', (e)=>{ if(e.target === overlay) cleanup(false); });
+  });
+}
+
+// ---------- generic "list of registered items" edit/delete modal (customers, exercise names, ...) ----------
+function showManageListModal(title, getItems, handlers){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:12px;padding:18px;width:100%;max-width:360px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.15);';
+  box.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <p style="font-size:14px;font-weight:500;margin:0;">${title}</p>
+      <button type="button" id="__manageClose">閉じる</button>
+    </div>
+    <div id="__manageList"></div>
+  `;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  box.querySelector('#__manageClose').addEventListener('click', ()=>overlay.remove());
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
+
+  function renderList(){
+    const listWrap = box.querySelector('#__manageList');
+    const items = getItems();
+    if(items.length === 0){
+      listWrap.innerHTML = '<p class="empty">項目がありません。</p>';
+      return;
+    }
+    listWrap.innerHTML = '';
+    items.forEach(item=>{
+      const row = document.createElement('div');
+      row.className = 'manage-row';
+      const span = document.createElement('span');
+      span.textContent = item.label;
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button'; editBtn.className = 'ghost'; editBtn.textContent = '✎';
+      editBtn.addEventListener('click', async ()=>{
+        const newName = await showPromptModal('新しい名前を入力してください', item.label);
+        if(newName && newName.trim() && newName.trim() !== item.label){
+          await handlers.onRename(item.key, newName.trim());
+          renderList();
+        }
+      });
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button'; delBtn.className = 'ghost'; delBtn.textContent = '×'; delBtn.style.color = 'var(--danger)';
+      delBtn.addEventListener('click', async ()=>{
+        const ok = await showConfirmModal(`「${item.label}」を削除しますか?`);
+        if(ok){
+          await handlers.onDelete(item.key);
+          renderList();
+        }
+      });
+      row.appendChild(span);
+      row.appendChild(editBtn);
+      row.appendChild(delBtn);
+      listWrap.appendChild(row);
+    });
+  }
+  renderList();
 }
 
 // ---------- generic exercise-name select (shared by strength & VBT) ----------
@@ -387,6 +480,31 @@ document.getElementById('customerSelect').addEventListener('change', async (e)=>
   await loadCustomerData();
 });
 
+document.getElementById('manageCustomersBtn').addEventListener('click', ()=>{
+  showManageListModal('顧客を編集', ()=>state.customers.map(c=>({key:c.id, label:c.name})), {
+    onRename: async (id, newName)=>{
+      const c = state.customers.find(c=>c.id===id);
+      if(!c) return;
+      c.name = newName;
+      await saveJSON('customers', state.customers);
+      renderCustomerSelect();
+    },
+    onDelete: async (id)=>{
+      state.customers = state.customers.filter(c=>c.id!==id);
+      await saveJSON('customers', state.customers);
+      localStorage.removeItem('sessions:'+id);
+      localStorage.removeItem('vbtSessions:'+id);
+      delete state.sessionsByCustomer[id];
+      delete state.vbtSessionsByCustomer[id];
+      if(currentCustomerId === id){
+        currentCustomerId = state.customers.length ? state.customers[0].id : null;
+      }
+      renderCustomerSelect();
+      await loadCustomerData();
+    }
+  });
+});
+
 async function loadCustomerData(){
   if(!currentCustomerId){
     renderHistory([]);
@@ -399,9 +517,15 @@ async function loadCustomerData(){
   if(!state.sessionsByCustomer[currentCustomerId]){
     state.sessionsByCustomer[currentCustomerId] = await loadJSON(key, []);
   }
+  if(ensureSessionIds(state.sessionsByCustomer[currentCustomerId])){
+    await saveJSON(key, state.sessionsByCustomer[currentCustomerId]);
+  }
   const vbtKey = 'vbtSessions:' + currentCustomerId;
   if(!state.vbtSessionsByCustomer[currentCustomerId]){
     state.vbtSessionsByCustomer[currentCustomerId] = await loadJSON(vbtKey, []);
+  }
+  if(ensureSessionIds(state.vbtSessionsByCustomer[currentCustomerId])){
+    await saveJSON(vbtKey, state.vbtSessionsByCustomer[currentCustomerId]);
   }
   renderHistory(state.sessionsByCustomer[currentCustomerId]);
   renderExerciseOptions();
@@ -411,16 +535,19 @@ async function loadCustomerData(){
   renderVbtProgress();
 }
 
+function ensureSessionIds(sessions){
+  let changed = false;
+  (sessions || []).forEach(s=>{
+    if(!s.id){ s.id = 's'+Date.now()+Math.random().toString(36).slice(2,6); changed = true; }
+  });
+  return changed;
+}
+
 // ================= 筋力トレーニング =================
 
-function addExerciseRow(prefill){
-  const id = 'r' + Date.now() + Math.random().toString(36).slice(2,6);
-  draftRows.push(id);
-  const wrap = document.getElementById('exerciseRows');
-  document.getElementById('exerciseHead').style.display = 'grid';
+function createStrengthRowElement(prefill, onRemove){
   const row = document.createElement('div');
   row.className = 'exercise-row';
-  row.id = id;
 
   const nameSel = createNameSelect(state.exercises, 'exercises', 'strength', prefill && prefill.name);
 
@@ -441,7 +568,7 @@ function addExerciseRow(prefill){
   delBtn.textContent = '×';
   delBtn.addEventListener('click', ()=>{
     row.remove();
-    draftRows = draftRows.filter(r=>r!==id);
+    if(onRemove) onRemove();
   });
 
   row.appendChild(nameSel);
@@ -449,6 +576,27 @@ function addExerciseRow(prefill){
   row.appendChild(repsInput);
   row.appendChild(setsInput);
   row.appendChild(delBtn);
+
+  row.__getData = ()=>{
+    const nameSelEl = row.querySelector('select[data-role="exerciseName"]');
+    const inputs = row.querySelectorAll('input');
+    return {
+      name: (nameSelEl ? nameSelEl.value : '').trim(),
+      weight: parseFloat(inputs[0].value),
+      reps: parseInt(inputs[1].value),
+      sets: parseInt(inputs[2].value)
+    };
+  };
+  return row;
+}
+
+function addExerciseRow(prefill){
+  const id = 'r' + Date.now() + Math.random().toString(36).slice(2,6);
+  draftRows.push(id);
+  const wrap = document.getElementById('exerciseRows');
+  document.getElementById('exerciseHead').style.display = 'grid';
+  const row = createStrengthRowElement(prefill, ()=>{ draftRows = draftRows.filter(r=>r!==id); });
+  row.id = id;
   wrap.appendChild(row);
 }
 
@@ -475,7 +623,7 @@ document.getElementById('saveSessionBtn').addEventListener('click', async ()=>{
   if(exercises.length === 0){ alert('種目・重量・回数を入力してください'); return; }
 
   const list = state.sessionsByCustomer[currentCustomerId] || [];
-  list.push({date, exercises});
+  list.push({id: 's'+Date.now()+Math.random().toString(36).slice(2,6), date, exercises});
   list.sort((a,b)=> a.date < b.date ? -1 : 1);
   state.sessionsByCustomer[currentCustomerId] = list;
 
@@ -488,6 +636,59 @@ document.getElementById('saveSessionBtn').addEventListener('click', async ()=>{
   renderExerciseOptions();
   renderHistory(list);
   renderProgress();
+});
+
+// ---------- rename/delete a registered exercise name (cascades into all customers' saved records) ----------
+async function renameExerciseEverywhere(list, storageKey, sessionsMap, sessionsKeyPrefix, oldName, newName){
+  const idx = list.indexOf(oldName);
+  if(idx === -1) return;
+  if(list.includes(newName)){
+    list.splice(idx,1);
+  } else {
+    list[idx] = newName;
+  }
+  await saveJSON(storageKey, list);
+  for(const c of state.customers){
+    const key = sessionsKeyPrefix + c.id;
+    const sessions = sessionsMap[c.id] || await loadJSON(key, []);
+    let changed = false;
+    sessions.forEach(s=>{
+      s.exercises.forEach(e=>{ if(e.name === oldName){ e.name = newName; changed = true; } });
+    });
+    sessionsMap[c.id] = sessions;
+    if(changed) await saveJSON(key, sessions);
+  }
+}
+async function deleteExerciseFromList(list, storageKey, name){
+  const idx = list.indexOf(name);
+  if(idx !== -1){
+    list.splice(idx,1);
+    await saveJSON(storageKey, list);
+  }
+}
+
+document.getElementById('manageExercisesBtn').addEventListener('click', ()=>{
+  showManageListModal('種目名を編集', ()=>state.exercises.map(n=>({key:n,label:n})), {
+    onRename: async (oldName, newName)=>{
+      await renameExerciseEverywhere(state.exercises, 'exercises', state.sessionsByCustomer, 'sessions:', oldName, newName);
+      document.querySelectorAll('select[data-group="strength"]').forEach(s=>{
+        const keep = s.value===oldName ? newName : s.value;
+        rebuildSelectOptions(s, state.exercises);
+        if(state.exercises.includes(keep)) s.value = keep;
+      });
+      renderExerciseOptions();
+      renderProgress();
+      renderHistory(state.sessionsByCustomer[currentCustomerId] || []);
+    },
+    onDelete: async (name)=>{
+      await deleteExerciseFromList(state.exercises, 'exercises', name);
+      document.querySelectorAll('select[data-group="strength"]').forEach(s=>{
+        const keep = s.value===name ? '' : s.value;
+        rebuildSelectOptions(s, state.exercises);
+        if(state.exercises.includes(keep)) s.value = keep;
+      });
+    }
+  });
 });
 
 function renderExerciseOptions(){
@@ -596,26 +797,107 @@ function renderHistory(sessions){
     return;
   }
   const sorted = sessions.slice().sort((a,b)=> a.date < b.date ? 1 : -1);
-  wrap.innerHTML = sorted.map(s=>`
-    <div class="history-item">
-      <div class="flex-between"><span style="font-weight:500;">${s.date}</span><span class="pill">${s.exercises.length}種目</span></div>
+  wrap.innerHTML = '';
+  sorted.forEach(s=>{
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    item.innerHTML = `
+      <div class="flex-between">
+        <span style="font-weight:500;">${s.date}</span>
+        <span class="history-actions">
+          <span class="pill">${s.exercises.length}種目</span>
+          <button type="button" class="icon-btn editSessionBtn" title="編集">✎</button>
+          <button type="button" class="icon-btn danger delSessionBtn" title="削除">×</button>
+        </span>
+      </div>
       <div class="small" style="margin-top:4px;">
         ${s.exercises.map(e=>`${e.name} ${e.weight}kg×${e.reps}回×${e.sets}set`).join(' / ')}
       </div>
+    `;
+    item.querySelector('.editSessionBtn').addEventListener('click', ()=>openEditSessionModal(s));
+    item.querySelector('.delSessionBtn').addEventListener('click', async ()=>{
+      const ok = await showConfirmModal(`${s.date}のセッション記録を削除しますか?`);
+      if(!ok) return;
+      const list = state.sessionsByCustomer[currentCustomerId] || [];
+      const idx = list.findIndex(x=>x.id===s.id);
+      if(idx !== -1){
+        list.splice(idx,1);
+        await saveJSON('sessions:'+currentCustomerId, list);
+        renderHistory(list);
+        renderExerciseOptions();
+        renderProgress();
+      }
+    });
+    wrap.appendChild(item);
+  });
+}
+
+function openEditSessionModal(session){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;overflow-y:auto;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:12px;padding:18px;width:100%;max-width:400px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.15);';
+  box.innerHTML = `
+    <p style="font-size:14px;font-weight:500;margin:0 0 10px;">セッションを編集</p>
+    <label for="__editDate">日付</label>
+    <input type="date" id="__editDate" style="margin-bottom:10px;width:100%;">
+    <div class="exercise-row">
+      <span class="colhead">種目</span><span class="colhead">重量kg</span><span class="colhead">回数</span><span class="colhead">set</span><span></span>
     </div>
-  `).join('');
+    <div id="__editRows"></div>
+    <div style="margin-top:10px;">
+      <button type="button" id="__editAddRow">+ 種目を追加</button>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" id="__editCancel">キャンセル</button>
+      <button type="button" id="__editSave" class="primary">保存</button>
+    </div>
+  `;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
+  box.querySelector('#__editCancel').addEventListener('click', ()=>overlay.remove());
+  box.querySelector('#__editDate').value = session.date;
+
+  const rowsWrap = box.querySelector('#__editRows');
+  let rowEls = [];
+  function addRow(prefill){
+    const row = createStrengthRowElement(prefill, ()=>{ rowEls = rowEls.filter(r=>r!==row); });
+    rowEls.push(row);
+    rowsWrap.appendChild(row);
+  }
+  session.exercises.forEach(e=>addRow(e));
+  box.querySelector('#__editAddRow').addEventListener('click', ()=>addRow());
+
+  box.querySelector('#__editSave').addEventListener('click', async ()=>{
+    const date = box.querySelector('#__editDate').value;
+    const exercises = [];
+    rowEls.forEach(row=>{
+      const d = row.__getData();
+      if(d.name && !isNaN(d.weight) && !isNaN(d.reps)){
+        exercises.push({name:d.name, weight:d.weight, reps:d.reps, sets: isNaN(d.sets)?1:d.sets});
+        if(!state.exercises.includes(d.name)) state.exercises.push(d.name);
+      }
+    });
+    if(exercises.length === 0){ alert('種目・重量・回数を入力してください'); return; }
+    session.date = date;
+    session.exercises = exercises;
+    const list = state.sessionsByCustomer[currentCustomerId] || [];
+    list.sort((a,b)=> a.date < b.date ? -1 : 1);
+    await saveJSON('sessions:'+currentCustomerId, list);
+    await saveJSON('exercises', state.exercises);
+    overlay.remove();
+    renderHistory(list);
+    renderExerciseOptions();
+    renderProgress();
+  });
 }
 
 // ================= VBT =================
 
-function addVbtRow(prefill){
-  const id = 'v' + Date.now() + Math.random().toString(36).slice(2,6);
-  draftVbtRows.push(id);
-  const wrap = document.getElementById('vbtExerciseRows');
-  document.getElementById('vbtExerciseHead').style.display = 'grid';
+function createVbtRowElement(prefill, onRemove){
   const row = document.createElement('div');
   row.className = 'exercise-row';
-  row.id = id;
 
   const nameSel = createNameSelect(state.vbtExercises, 'vbtExercises', 'vbt', prefill && prefill.name);
 
@@ -636,7 +918,7 @@ function addVbtRow(prefill){
   delBtn.textContent = '×';
   delBtn.addEventListener('click', ()=>{
     row.remove();
-    draftVbtRows = draftVbtRows.filter(r=>r!==id);
+    if(onRemove) onRemove();
   });
 
   row.appendChild(nameSel);
@@ -644,6 +926,27 @@ function addVbtRow(prefill){
   row.appendChild(velocityInput);
   row.appendChild(repsInput);
   row.appendChild(delBtn);
+
+  row.__getData = ()=>{
+    const nameSelEl = row.querySelector('select[data-role="exerciseName"]');
+    const inputs = row.querySelectorAll('input');
+    return {
+      name: (nameSelEl ? nameSelEl.value : '').trim(),
+      weight: parseFloat(inputs[0].value),
+      velocity: parseFloat(inputs[1].value),
+      reps: parseInt(inputs[2].value)
+    };
+  };
+  return row;
+}
+
+function addVbtRow(prefill){
+  const id = 'v' + Date.now() + Math.random().toString(36).slice(2,6);
+  draftVbtRows.push(id);
+  const wrap = document.getElementById('vbtExerciseRows');
+  document.getElementById('vbtExerciseHead').style.display = 'grid';
+  const row = createVbtRowElement(prefill, ()=>{ draftVbtRows = draftVbtRows.filter(r=>r!==id); });
+  row.id = id;
   wrap.appendChild(row);
 }
 
@@ -670,7 +973,7 @@ document.getElementById('saveVbtSessionBtn').addEventListener('click', async ()=
   if(exercises.length === 0){ alert('種目・重量・平均速度を入力してください'); return; }
 
   const list = state.vbtSessionsByCustomer[currentCustomerId] || [];
-  list.push({date, exercises});
+  list.push({id: 's'+Date.now()+Math.random().toString(36).slice(2,6), date, exercises});
   list.sort((a,b)=> a.date < b.date ? -1 : 1);
   state.vbtSessionsByCustomer[currentCustomerId] = list;
 
@@ -683,6 +986,30 @@ document.getElementById('saveVbtSessionBtn').addEventListener('click', async ()=
   renderVbtExerciseOptions();
   renderVbtHistory(list);
   renderVbtProgress();
+});
+
+document.getElementById('manageVbtExercisesBtn').addEventListener('click', ()=>{
+  showManageListModal('種目名を編集(VBT)', ()=>state.vbtExercises.map(n=>({key:n,label:n})), {
+    onRename: async (oldName, newName)=>{
+      await renameExerciseEverywhere(state.vbtExercises, 'vbtExercises', state.vbtSessionsByCustomer, 'vbtSessions:', oldName, newName);
+      document.querySelectorAll('select[data-group="vbt"]').forEach(s=>{
+        const keep = s.value===oldName ? newName : s.value;
+        rebuildSelectOptions(s, state.vbtExercises);
+        if(state.vbtExercises.includes(keep)) s.value = keep;
+      });
+      renderVbtExerciseOptions();
+      renderVbtProgress();
+      renderVbtHistory(state.vbtSessionsByCustomer[currentCustomerId] || []);
+    },
+    onDelete: async (name)=>{
+      await deleteExerciseFromList(state.vbtExercises, 'vbtExercises', name);
+      document.querySelectorAll('select[data-group="vbt"]').forEach(s=>{
+        const keep = s.value===name ? '' : s.value;
+        rebuildSelectOptions(s, state.vbtExercises);
+        if(state.vbtExercises.includes(keep)) s.value = keep;
+      });
+    }
+  });
 });
 
 function renderVbtExerciseOptions(){
@@ -928,14 +1255,100 @@ function renderVbtHistory(sessions){
     return;
   }
   const sorted = sessions.slice().sort((a,b)=> a.date < b.date ? 1 : -1);
-  wrap.innerHTML = sorted.map(s=>`
-    <div class="history-item">
-      <div class="flex-between"><span style="font-weight:500;">${s.date}</span><span class="pill vbt">${s.exercises.length}種目</span></div>
+  wrap.innerHTML = '';
+  sorted.forEach(s=>{
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    item.innerHTML = `
+      <div class="flex-between">
+        <span style="font-weight:500;">${s.date}</span>
+        <span class="history-actions">
+          <span class="pill vbt">${s.exercises.length}種目</span>
+          <button type="button" class="icon-btn editVbtSessionBtn" title="編集">✎</button>
+          <button type="button" class="icon-btn danger delVbtSessionBtn" title="削除">×</button>
+        </span>
+      </div>
       <div class="small" style="margin-top:4px;">
         ${s.exercises.map(e=>`${e.name} ${e.weight}kg @ ${e.velocity.toFixed(2)}m/s ×${e.reps}回`).join(' / ')}
       </div>
+    `;
+    item.querySelector('.editVbtSessionBtn').addEventListener('click', ()=>openEditVbtSessionModal(s));
+    item.querySelector('.delVbtSessionBtn').addEventListener('click', async ()=>{
+      const ok = await showConfirmModal(`${s.date}のVBTセッション記録を削除しますか?`);
+      if(!ok) return;
+      const list = state.vbtSessionsByCustomer[currentCustomerId] || [];
+      const idx = list.findIndex(x=>x.id===s.id);
+      if(idx !== -1){
+        list.splice(idx,1);
+        await saveJSON('vbtSessions:'+currentCustomerId, list);
+        renderVbtHistory(list);
+        renderVbtExerciseOptions();
+        renderVbtProgress();
+      }
+    });
+    wrap.appendChild(item);
+  });
+}
+
+function openEditVbtSessionModal(session){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;overflow-y:auto;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:12px;padding:18px;width:100%;max-width:400px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.15);';
+  box.innerHTML = `
+    <p style="font-size:14px;font-weight:500;margin:0 0 10px;">VBTセッションを編集</p>
+    <label for="__editVbtDate">日付</label>
+    <input type="date" id="__editVbtDate" style="margin-bottom:10px;width:100%;">
+    <div class="exercise-row">
+      <span class="colhead">種目</span><span class="colhead">重量kg</span><span class="colhead">平均速度m/s</span><span class="colhead">回数</span><span></span>
     </div>
-  `).join('');
+    <div id="__editVbtRows"></div>
+    <div style="margin-top:10px;">
+      <button type="button" id="__editVbtAddRow">+ 種目を追加</button>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" id="__editVbtCancel">キャンセル</button>
+      <button type="button" id="__editVbtSave" class="primary vbt">保存</button>
+    </div>
+  `;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
+  box.querySelector('#__editVbtCancel').addEventListener('click', ()=>overlay.remove());
+  box.querySelector('#__editVbtDate').value = session.date;
+
+  const rowsWrap = box.querySelector('#__editVbtRows');
+  let rowEls = [];
+  function addRow(prefill){
+    const row = createVbtRowElement(prefill, ()=>{ rowEls = rowEls.filter(r=>r!==row); });
+    rowEls.push(row);
+    rowsWrap.appendChild(row);
+  }
+  session.exercises.forEach(e=>addRow(e));
+  box.querySelector('#__editVbtAddRow').addEventListener('click', ()=>addRow());
+
+  box.querySelector('#__editVbtSave').addEventListener('click', async ()=>{
+    const date = box.querySelector('#__editVbtDate').value;
+    const exercises = [];
+    rowEls.forEach(row=>{
+      const d = row.__getData();
+      if(d.name && !isNaN(d.weight) && !isNaN(d.velocity)){
+        exercises.push({name:d.name, weight:d.weight, velocity:d.velocity, reps: isNaN(d.reps)?1:d.reps});
+        if(!state.vbtExercises.includes(d.name)) state.vbtExercises.push(d.name);
+      }
+    });
+    if(exercises.length === 0){ alert('種目・重量・平均速度を入力してください'); return; }
+    session.date = date;
+    session.exercises = exercises;
+    const list = state.vbtSessionsByCustomer[currentCustomerId] || [];
+    list.sort((a,b)=> a.date < b.date ? -1 : 1);
+    await saveJSON('vbtSessions:'+currentCustomerId, list);
+    await saveJSON('vbtExercises', state.vbtExercises);
+    overlay.remove();
+    renderVbtHistory(list);
+    renderVbtExerciseOptions();
+    renderVbtProgress();
+  });
 }
 
 init();
