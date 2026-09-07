@@ -151,6 +151,9 @@
     <button id="addCustomerBtn">+ 新規顧客</button>
     <button id="manageCustomersBtn">✎ 顧客を編集</button>
   </div>
+  <div class="row" style="margin-top:4px;">
+    <button id="exportDataBtn" style="width:100%;">⇪ データをエクスポート(アプリ版へ移行用)</button>
+  </div>
 </div>
 
 <p class="section-label">筋力トレーニング</p>
@@ -506,6 +509,47 @@ document.getElementById('manageCustomersBtn').addEventListener('click', ()=>{
       await loadCustomerData();
     }
   });
+});
+
+document.getElementById('exportDataBtn').addEventListener('click', async ()=>{
+  const data = {
+    customers: state.customers,
+    exercises: state.exercises,
+    vbtExercises: state.vbtExercises,
+    sessions: {},
+    vbtSessions: {}
+  };
+  for(const c of state.customers){
+    data.sessions[c.id] = await loadJSON('sessions:'+c.id, []);
+    data.vbtSessions[c.id] = await loadJSON('vbtSessions:'+c.id, []);
+  }
+  const json = JSON.stringify(data);
+
+  let copied = false;
+  try{
+    await navigator.clipboard.writeText(json);
+    copied = true;
+  }catch(e){ /* clipboard APIが使えない場合はテキスト表示にフォールバック */ }
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:12px;padding:18px;width:100%;max-width:400px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.15);';
+  box.innerHTML = `
+    <p style="font-size:14px;font-weight:500;margin:0 0 10px;">データをエクスポートしました</p>
+    <p class="small" style="margin:0 0 10px;">${copied ? 'クリップボードにコピー済みです。アプリ版の「データを取り込む」画面に貼り付けてください。' : '下のテキストを全選択してコピーし、アプリ版の「データを取り込む」画面に貼り付けてください。'}</p>
+    <textarea id="__exportText" readonly style="width:100%;height:160px;font-size:11px;box-sizing:border-box;padding:8px;border:1px solid var(--border-strong);border-radius:8px;"></textarea>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+      <button type="button" id="__exportClose" class="primary">閉じる</button>
+    </div>
+  `;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  const textarea = box.querySelector('#__exportText');
+  textarea.value = json;
+  textarea.addEventListener('click', ()=>textarea.select());
+  box.querySelector('#__exportClose').addEventListener('click', ()=>overlay.remove());
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) overlay.remove(); });
 });
 
 async function loadCustomerData(){
